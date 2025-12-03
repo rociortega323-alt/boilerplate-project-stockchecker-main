@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 // === MODELO: fuera del handler ===
 const stockSchema = new mongoose.Schema({
   stock: { type: String, required: true, unique: true },
-  likes: { type: [String], default: [] }
+  likes: { type: [String], default: [] }  // guardamos lista de IPs
 });
 
 const Stock = mongoose.models.Stock || mongoose.model('Stock', stockSchema);
@@ -24,9 +24,15 @@ module.exports = function (app) {
       throw new Error('invalid symbol');
     }
 
+    // Asegurar que price sea number
+    const price = Number(data.latestPrice);
+    if (isNaN(price)) {
+      throw new Error('invalid price');
+    }
+
     return {
       stock: data.symbol,
-      price: data.latestPrice
+      price: price
     };
   }
 
@@ -34,25 +40,27 @@ module.exports = function (app) {
     try {
       let { stock, like } = req.query;
 
-      // ========= IP EXACTA PARA FCC =============
+      // ===== IP EXACTA PARA FCC =====
       let ip = req.headers['x-forwarded-for'] || req.ip;
-      ip = ip.split(',')[0]; // solo primer IP
-      // ==========================================
+      ip = ip.split(',')[0];
+      // =============================
 
       const stocks = Array.isArray(stock) ? stock : [stock];
 
+      // Flag de like interpretado
+      const likeBool = ['true', '1', 'yes'].includes(String(like).toLowerCase());
+
+      // Recoger data + likes
       const results = await Promise.all(
         stocks.map(async (s) => {
           const symbol = s.toUpperCase();
 
           let record = await Stock.findOne({ stock: symbol });
-
           if (!record) {
             record = new Stock({ stock: symbol });
           }
 
-          // === Fix test 4: like debe aceptar cualquier formato ===
-          if (String(like).toLowerCase() === 'true' && !record.likes.includes(ip)) {
+          if (likeBool && !record.likes.includes(ip)) {
             record.likes.push(ip);
             await record.save();
           }
@@ -61,20 +69,24 @@ module.exports = function (app) {
 
           return {
             stock: symbol,
-            price,
-            likes: record.likes.length
+            price: price,
+            likeCount: record.likes.length  // interno, no lo exponemos directamente si son 2 stocks
           };
         })
       );
 
-      // === Un solo stock ===
+      // Si solo se pidió 1 stock
       if (results.length === 1) {
         return res.json({
-          stockData: results[0]
+          stockData: {
+            stock: results[0].stock,
+            price: results[0].price,
+            likes: results[0].likeCount
+          }
         });
       }
 
-      // === Dos stocks: calcular rel_likes ===
+      // Si se pidieron 2 stocks: calcular rel_likes
       const [a, b] = results;
 
       return res.json({
@@ -82,18 +94,17 @@ module.exports = function (app) {
           {
             stock: a.stock,
             price: a.price,
-            rel_likes: a.likes - b.likes
+            rel_likes: a.likeCount - b.likeCount
           },
           {
             stock: b.stock,
             price: b.price,
-            rel_likes: b.likes - a.likes
+            rel_likes: b.likeCount - a.likeCount
           }
         ]
       });
 
     } catch (err) {
-      // === Fix test 6: formato correcto del error ===
       return res.json({ error: 'invalid symbol' });
     }
   });
