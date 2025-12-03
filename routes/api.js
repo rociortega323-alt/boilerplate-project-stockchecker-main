@@ -51,7 +51,8 @@ module.exports = function (app) {
             record = new Stock({ stock: symbol });
           }
 
-          if (like === 'true' && !record.likes.includes(ip)) {
+          // === Fix test 4: like debe aceptar cualquier formato ===
+          if (String(like).toLowerCase() === 'true' && !record.likes.includes(ip)) {
             record.likes.push(ip);
             await record.save();
           }
@@ -66,12 +67,14 @@ module.exports = function (app) {
         })
       );
 
+      // === Un solo stock ===
       if (results.length === 1) {
         return res.json({
           stockData: results[0]
         });
       }
 
+      // === Dos stocks: calcular rel_likes ===
       const [a, b] = results;
 
       return res.json({
@@ -90,7 +93,8 @@ module.exports = function (app) {
       });
 
     } catch (err) {
-      return res.json({ stockData: { error: 'invalid symbol' } });
+      // === Fix test 6: formato correcto del error ===
+      return res.json({ error: 'invalid symbol' });
     }
   });
 };
