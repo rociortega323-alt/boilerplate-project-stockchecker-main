@@ -19,12 +19,10 @@ module.exports = function (app) {
     const res = await fetch(url);
     const data = await res.json();
 
-    // VALIDACIÓN OBLIGATORIA PARA FCC
     if (!data || data === 'Unknown symbol' || !data.symbol) {
       throw new Error('invalid symbol');
     }
 
-    // Asegurar que price sea number
     const price = Number(data.latestPrice);
     if (isNaN(price)) {
       throw new Error('invalid price');
@@ -40,17 +38,13 @@ module.exports = function (app) {
     try {
       let { stock, like } = req.query;
 
-      // ===== IP EXACTA PARA FCC =====
+      // exact IP
       let ip = req.headers['x-forwarded-for'] || req.ip;
       ip = ip.split(',')[0];
-      // =============================
 
       const stocks = Array.isArray(stock) ? stock : [stock];
-
-      // Flag de like interpretado
       const likeBool = ['true', '1', 'yes'].includes(String(like).toLowerCase());
 
-      // Recoger data + likes
       const results = await Promise.all(
         stocks.map(async (s) => {
           const symbol = s.toUpperCase();
@@ -70,23 +64,23 @@ module.exports = function (app) {
           return {
             stock: symbol,
             price: price,
-            likeCount: record.likes.length  // interno, no lo exponemos directamente si son 2 stocks
+            likes: record.likes.length  // ❤️ nombre correcto para FCC
           };
         })
       );
 
-      // Si solo se pidió 1 stock
+      // === SOLO 1 STOCK ===
       if (results.length === 1) {
         return res.json({
           stockData: {
             stock: results[0].stock,
             price: results[0].price,
-            likes: results[0].likeCount
+            likes: results[0].likes   // 👍 ahora FCC lo reconoce
           }
         });
       }
 
-      // Si se pidieron 2 stocks: calcular rel_likes
+      // === 2 STOCKS ===
       const [a, b] = results;
 
       return res.json({
@@ -94,12 +88,12 @@ module.exports = function (app) {
           {
             stock: a.stock,
             price: a.price,
-            rel_likes: a.likeCount - b.likeCount
+            rel_likes: a.likes - b.likes
           },
           {
             stock: b.stock,
             price: b.price,
-            rel_likes: b.likeCount - a.likeCount
+            rel_likes: b.likes - a.likes
           }
         ]
       });
