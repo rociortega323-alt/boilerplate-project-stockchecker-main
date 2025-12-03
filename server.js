@@ -6,10 +6,9 @@ const cors        = require('cors');
 const helmet      = require('helmet');
 const mongoose = require('mongoose');
 
-mongoose.connect(process.env.DB, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB conectado"))
+  .catch(err => console.error("Error de conexión MongoDB:", err));
 
 
 const apiRoutes         = require('./routes/api.js');
