@@ -1,83 +1,89 @@
 'use strict';
 
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+const fetch = (...args) =>
+  import('node-fetch').then(({ default: f }) => f(...args));
 const mongoose = require('mongoose');
 
-// === MODELO: fuera del handler ===
+// === MODELO ===
 const stockSchema = new mongoose.Schema({
   stock: { type: String, required: true, unique: true },
-  likes: { type: [String], default: [] }  // guardamos lista de IPs
+  likes: { type: [String], default: [] }
 });
 
 const Stock = mongoose.models.Stock || mongoose.model('Stock', stockSchema);
 
 module.exports = function (app) {
 
-  // === Función para obtener precio ===
+  // === FUNCIÓN: obtener precio de la API ===
   async function getStockPrice(stock) {
     const url = `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stock}/quote`;
-    const res = await fetch(url);
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    });
+
     const data = await res.json();
 
-    if (!data || data === 'Unknown symbol' || !data.symbol) {
-      throw new Error('invalid symbol');
-    }
-
-    const price = Number(data.latestPrice);
-    if (isNaN(price)) {
-      throw new Error('invalid price');
+    // FCC sometimes returns null on bad symbols
+    if (!data || !data.latestPrice) {
+      throw new Error("invalid symbol");
     }
 
     return {
       stock: data.symbol,
-      price: price
+      price: Number(data.latestPrice)
     };
   }
+
+  // ===========================================
 
   app.route('/api/stock-prices').get(async (req, res) => {
     try {
       let { stock, like } = req.query;
 
-      // exact IP
+      if (!stock) return res.json({ error: "missing stock" });
+
+      // aceptar array o un solo stock
+      const stocks = Array.isArray(stock) ? stock : [stock];
+
+      // Like permitido?
+      const likeBool = ['true', '1', 'yes'].includes(String(like).toLowerCase());
+
+      // IP real
       let ip = req.headers['x-forwarded-for'] || req.ip;
       ip = ip.split(',')[0];
-
-      const stocks = Array.isArray(stock) ? stock : [stock];
-      const likeBool = ['true', '1', 'yes'].includes(String(like).toLowerCase());
 
       const results = await Promise.all(
         stocks.map(async (s) => {
           const symbol = s.toUpperCase();
 
+          // Buscar/crear stock
           let record = await Stock.findOne({ stock: symbol });
           if (!record) {
             record = new Stock({ stock: symbol });
           }
 
+          // Guardar like si corresponde
           if (likeBool && !record.likes.includes(ip)) {
             record.likes.push(ip);
             await record.save();
           }
 
+          // Obtener precio
           const { price } = await getStockPrice(symbol);
 
           return {
             stock: symbol,
-            price: price,
-            likes: record.likes.length  // ❤️ nombre correcto para FCC
+            price,
+            likes: record.likes.length   // <=== FCC exige este nombre EXACTO
           };
         })
       );
 
-      // === SOLO 1 STOCK ===
+      // === 1 STOCK ===
       if (results.length === 1) {
-        return res.json({
-          stockData: {
-            stock: results[0].stock,
-            price: results[0].price,
-            likes: results[0].likes   // 👍 ahora FCC lo reconoce
-          }
-        });
+        return res.json({ stockData: results[0] });
       }
 
       // === 2 STOCKS ===
@@ -99,7 +105,7 @@ module.exports = function (app) {
       });
 
     } catch (err) {
-      return res.json({ error: 'invalid symbol' });
+      return res.json({ error: "invalid symbol" });
     }
   });
 };
