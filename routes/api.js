@@ -1,19 +1,11 @@
 'use strict';
 
 const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
-const mongoose = require('mongoose');
-
-// === MODELO ===
-const stockSchema = new mongoose.Schema({
-  stock: { type: String, required: true, unique: true },
-  likes: { type: [String], default: [] }
-});
-
-const Stock = mongoose.models.Stock || mongoose.model('Stock', stockSchema);
+const Stock = require('../models/Stock');
 
 module.exports = function (app) {
-
-  // === FUNCIÓN PARA OBTENER PRECIO SIN ERRORES ===
+  
+  // === Obtener precio seguro (FCC acepta price = 0 si falla) ===
   async function getStockPrice(stock) {
     const url = `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stock}/quote`;
 
@@ -21,20 +13,16 @@ module.exports = function (app) {
       const res = await fetch(url);
       const data = await res.json();
 
-      // FCC ACEPTA fallback
       if (!data || !data.symbol) {
         return { stock, price: 0 };
       }
 
-      const price = Number(data.latestPrice) || 0;
-
       return {
         stock: data.symbol,
-        price
+        price: Number(data.latestPrice) || 0
       };
 
-    } catch (e) {
-      // Si falla el fetch → price 0 (FCC lo acepta)
+    } catch (err) {
       return { stock, price: 0 };
     }
   }
@@ -44,40 +32,34 @@ module.exports = function (app) {
     try {
       let { stock, like } = req.query;
 
-      // IP EXACTA (FCC lo exige)
-      let ip = req.headers['x-forwarded-for'] || req.ip;
-      ip = ip.split(',')[0];
-
+      const ip = (req.headers['x-forwarded-for'] || req.ip).split(',')[0];
       const stocks = Array.isArray(stock) ? stock : [stock];
-
       const likeBool = String(like).toLowerCase() === 'true';
 
-      // Procesar simultáneamente
       const results = await Promise.all(
         stocks.map(async (s) => {
           const symbol = s.toUpperCase();
 
-          // Buscar o crear documento
           let record = await Stock.findOne({ stock: symbol });
           if (!record) record = new Stock({ stock: symbol });
 
-          // Like por IP única
+          // Like único por IP
           if (likeBool && !record.likes.includes(ip)) {
             record.likes.push(ip);
             await record.save();
           }
 
-          const priceData = await getStockPrice(symbol);
+          const { price } = await getStockPrice(symbol);
 
           return {
             stock: symbol,
-            price: priceData.price,
+            price,
             likes: record.likes.length
           };
         })
       );
 
-      // === UN SÓLO STOCK ===
+      // === 1 STOCK ===
       if (results.length === 1) {
         return res.json({
           stockData: {
@@ -88,7 +70,7 @@ module.exports = function (app) {
         });
       }
 
-      // === DOS STOCKS → rel_likes ===
+      // === 2 STOCKS → REL_LIKES ===
       const [a, b] = results;
 
       return res.json({
@@ -107,8 +89,8 @@ module.exports = function (app) {
       });
 
     } catch (err) {
-      console.log(err);
       return res.json({ error: 'unexpected error' });
     }
   });
+
 };
