@@ -1,7 +1,6 @@
 'use strict';
 
 const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
-const Stock = require('../models/Stock');
 
 module.exports = function (app) {
   
