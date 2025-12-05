@@ -4,8 +4,9 @@ const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...ar
 const Stock = require('../models/Stock');
 const crypto = require('crypto');
 
-module.exports = function (app) {
+module.exports = function(app) {
 
+  // Obtener precio de la API proxy de FreeCodeCamp
   async function getStockPrice(stock) {
     const url = `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stock}/quote`;
     try {
@@ -21,21 +22,26 @@ module.exports = function (app) {
   app.route('/api/stock-prices').get(async (req, res) => {
     try {
       let { stock, like } = req.query;
+      if (!stock) return res.json({ error: 'No stock provided' });
+
+      // Convertir a array si vienen dos
       let stocks = Array.isArray(stock) ? stock : [stock];
       const likeBool = String(like).toLowerCase() === 'true';
 
-      // Hash de IP consistente
-      const ipRaw = req.ip || req.connection.remoteAddress;
+      // Hash de IP para anonimizar
+      const ipRaw = req.ip || req.connection.remoteAddress || '';
       const hashedIp = crypto.createHash('sha256').update(ipRaw).digest('hex');
 
       const results = [];
 
+      // Procesar cada stock
       for (const s of stocks) {
         const symbol = s.toUpperCase();
 
         let record = await Stock.findOne({ stock: symbol });
         if (!record) record = new Stock({ stock: symbol, likes: [] });
 
+        // Agregar like si corresponde y no existe ya
         if (likeBool && !record.likes.includes(hashedIp)) {
           record.likes.push(hashedIp);
           await record.save();
@@ -50,6 +56,7 @@ module.exports = function (app) {
         });
       }
 
+      // Respuesta para un solo stock
       if (results.length === 1) {
         return res.json({
           stockData: {
@@ -60,12 +67,20 @@ module.exports = function (app) {
         });
       }
 
-      // Dos stocks → rel_likes
+      // Respuesta para dos stocks → solo rel_likes
       const [a, b] = results;
       return res.json({
         stockData: [
-          { stock: a.stock, price: a.price, rel_likes: a.likes - b.likes },
-          { stock: b.stock, price: b.price, rel_likes: b.likes - a.likes }
+          {
+            stock: a.stock,
+            price: a.price,
+            rel_likes: a.likes - b.likes
+          },
+          {
+            stock: b.stock,
+            price: b.price,
+            rel_likes: b.likes - a.likes
+          }
         ]
       });
 
