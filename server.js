@@ -20,7 +20,7 @@ const runner            = require('./test-runner');
 
 const app = express();
 
-// === Helmet CSP exacta para FreeCodeCamp ===
+// Helmet CSP exacta para FreeCodeCamp
 app.use(
   helmet.contentSecurityPolicy({
     directives: {
