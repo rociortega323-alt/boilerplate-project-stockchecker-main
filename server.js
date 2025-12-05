@@ -20,48 +20,66 @@ const runner            = require('./test-runner');
 
 const app = express();
 
-// Helmet CSP exacta para FreeCodeCamp
+/*
+  🚨 IMPORTANTE PARA FCC
+  Debe permitirse SOLO 'self' para scripts y estilos,
+  pero se debe permitir data: para imágenes inline del frontend
+  y 'unsafe-inline' para estilos dentro del index.html de FCC.
+*/
 app.use(
-  helmet.contentSecurityPolicy({
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'"],
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"]
+      },
     },
+    // Evitar conflictos típicos en FCC
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false
   })
 );
 
+// Archivos estáticos
 app.use('/public', express.static(process.cwd() + '/public'));
-app.use(cors({ origin: '*' })); // FCC testing only
+
+// CORS solo para las pruebas de FCC
+app.use(cors({ origin: '*' }));
+
+// Body parser
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Index page
-app.route('/')
-  .get((req, res) => {
-    res.sendFile(process.cwd() + '/views/index.html');
-  });
+// Página principal
+app.route('/').get((req, res) => {
+  res.sendFile(process.cwd() + '/views/index.html');
+});
 
-// FCC testing routes
+// Rutas de pruebas FCC
 fccTestingRoutes(app);
 
-// API routes
+// Rutas de la API
 apiRoutes(app);
 
 // 404
-app.use((req, res, next) => {
+app.use((req, res) => {
   res.status(404).type('text').send('Not Found');
 });
 
-// Start server ONLY if NOT in test mode
+// Servidor
 let listener;
 if (process.env.NODE_ENV !== 'test') {
   listener = app.listen(process.env.PORT || 3000, () => {
-    console.log('Servidor escuchando en puerto ' + (listener.address().port || process.env.PORT));
+    console.log(
+      'Servidor escuchando en puerto ' +
+        (listener.address().port || process.env.PORT)
+    );
   });
 }
 
-// Run tests if in test mode
+// Ejecutar pruebas
 if (process.env.NODE_ENV === 'test') {
   console.log('Running Tests...');
   setTimeout(() => {
@@ -74,4 +92,4 @@ if (process.env.NODE_ENV === 'test') {
   }, 3500);
 }
 
-module.exports = app; // para testing
+module.exports = app;
