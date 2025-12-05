@@ -26,7 +26,7 @@ module.exports = function (app) {
       else if (typeof stock === 'string') stocks = [stock];
       else return res.json({ error: 'invalid stock' });
 
-      const ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.ip).split(',')[0].trim();
+      const ip = req.ip;
       const likeBool = String(like).toLowerCase() === 'true';
 
       const results = [];
@@ -61,18 +61,19 @@ module.exports = function (app) {
         });
       }
 
+      // Dos stocks: usar rel_likes
       const [a, b] = results;
       return res.json({
         stockData: [
           {
             stock: a.stock,
             price: a.price,
-            rel_likes: Number(a.likes - b.likes)
+            rel_likes: a.likes - b.likes
           },
           {
             stock: b.stock,
             price: b.price,
-            rel_likes: Number(b.likes - a.likes)
+            rel_likes: b.likes - a.likes
           }
         ]
       });
