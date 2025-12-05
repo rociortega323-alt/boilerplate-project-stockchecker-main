@@ -39,7 +39,6 @@ suite('Functional Tests', function() {
         assert.equal(res.status, 200);
         assert.property(res.body, 'stockData');
         assert.property(res.body.stockData, 'likes');
-        // The likes should not increase because the same IP can't like twice
         assert.isAtMost(res.body.stockData.likes, 1);
         done();
       });
