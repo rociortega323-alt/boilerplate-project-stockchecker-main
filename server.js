@@ -1,4 +1,5 @@
 'use strict';
+
 require('dotenv').config();
 const express     = require('express');
 const bodyParser  = require('body-parser');
@@ -54,7 +55,11 @@ app.use((req, res, next) => {
 
 // Start server + tests
 const listener = app.listen(process.env.PORT || 3000, () => {
-  console.log('Servidor escuchando en puerto ' + listener.address().port);
+  if (process.env.NODE_ENV !== 'test') {
+    console.log('Servidor escuchando en puerto ' + listener.address().port);
+  }
+
+  // Solo ejecutar runner si estamos en modo test
   if (process.env.NODE_ENV === 'test') {
     console.log('Running Tests...');
     setTimeout(() => {
