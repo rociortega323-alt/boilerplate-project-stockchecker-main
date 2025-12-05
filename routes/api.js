@@ -5,6 +5,7 @@ const Stock = require('../models/Stock');
 
 module.exports = function (app) {
 
+  // Función para obtener precio de la acción
   async function getStockPrice(stock) {
     const url = `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stock}/quote`;
     try {
@@ -26,16 +27,18 @@ module.exports = function (app) {
       else if (typeof stock === 'string') stocks = [stock];
       else return res.json({ error: 'invalid stock' });
 
-      const ip = (req.headers['x-forwarded-for'] || req.ip).split(',')[0];
+      const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.ip;
       const likeBool = String(like).toLowerCase() === 'true';
 
       const results = [];
+
       for (const s of stocks) {
         const symbol = s.toUpperCase();
 
         let record = await Stock.findOne({ stock: symbol });
-        if (!record) record = new Stock({ stock: symbol });
+        if (!record) record = new Stock({ stock: symbol, likes: [] });
 
+        // Manejo de likes por IP
         if (likeBool && !record.likes.includes(ip)) {
           record.likes.push(ip);
           await record.save();
@@ -50,6 +53,7 @@ module.exports = function (app) {
         });
       }
 
+      // Si es 1 stock
       if (results.length === 1) {
         return res.json({
           stockData: {
@@ -60,6 +64,7 @@ module.exports = function (app) {
         });
       }
 
+      // Si son 2 stocks
       const [a, b] = results;
       return res.json({
         stockData: [
