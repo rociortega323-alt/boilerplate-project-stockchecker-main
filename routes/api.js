@@ -1,64 +1,55 @@
 'use strict';
 
 const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+const Stock = require('../models/Stock');
 
 module.exports = function (app) {
-  
-  // === Obtener precio seguro (FCC acepta price = 0 si falla) ===
+
   async function getStockPrice(stock) {
     const url = `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stock}/quote`;
-
     try {
       const res = await fetch(url);
       const data = await res.json();
-
-      if (!data || !data.symbol) {
-        return { stock, price: 0 };
-      }
-
-      return {
-        stock: data.symbol,
-        price: Number(data.latestPrice) || 0
-      };
-
+      const price = parseFloat(data.latestPrice);
+      return { stock, price: isNaN(price) ? 0 : price };
     } catch (err) {
       return { stock, price: 0 };
     }
   }
 
-  // === RUTA PRINCIPAL ===
   app.route('/api/stock-prices').get(async (req, res) => {
     try {
       let { stock, like } = req.query;
+      let stocks = [];
+
+      if (Array.isArray(stock)) stocks = stock;
+      else if (typeof stock === 'string') stocks = [stock];
+      else return res.json({ error: 'invalid stock' });
 
       const ip = (req.headers['x-forwarded-for'] || req.ip).split(',')[0];
-      const stocks = Array.isArray(stock) ? stock : [stock];
       const likeBool = String(like).toLowerCase() === 'true';
 
-      const results = await Promise.all(
-        stocks.map(async (s) => {
-          const symbol = s.toUpperCase();
+      const results = [];
+      for (const s of stocks) {
+        const symbol = s.toUpperCase();
 
-          let record = await Stock.findOne({ stock: symbol });
-          if (!record) record = new Stock({ stock: symbol });
+        let record = await Stock.findOne({ stock: symbol });
+        if (!record) record = new Stock({ stock: symbol });
 
-          // Like único por IP
-          if (likeBool && !record.likes.includes(ip)) {
-            record.likes.push(ip);
-            await record.save();
-          }
+        if (likeBool && !record.likes.includes(ip)) {
+          record.likes.push(ip);
+          await record.save();
+        }
 
-          const { price } = await getStockPrice(symbol);
+        const { price } = await getStockPrice(symbol);
 
-          return {
-            stock: symbol,
-            price,
-            likes: record.likes.length
-          };
-        })
-      );
+        results.push({
+          stock: symbol,
+          price: Number(price),
+          likes: record.likes.length
+        });
+      }
 
-      // === 1 STOCK ===
       if (results.length === 1) {
         return res.json({
           stockData: {
@@ -69,9 +60,7 @@ module.exports = function (app) {
         });
       }
 
-      // === 2 STOCKS → REL_LIKES ===
       const [a, b] = results;
-
       return res.json({
         stockData: [
           {
@@ -88,6 +77,7 @@ module.exports = function (app) {
       });
 
     } catch (err) {
+      console.error(err);
       return res.json({ error: 'unexpected error' });
     }
   });
