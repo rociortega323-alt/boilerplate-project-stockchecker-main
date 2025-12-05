@@ -53,24 +53,25 @@ app.use((req, res, next) => {
   res.status(404).type('text').send('Not Found');
 });
 
-// Start server + tests
-const listener = app.listen(process.env.PORT || 3000, () => {
-  if (process.env.NODE_ENV !== 'test') {
-    console.log('Servidor escuchando en puerto ' + listener.address().port);
-  }
+// Start server ONLY if NOT in test mode
+let listener;
+if (process.env.NODE_ENV !== 'test') {
+  listener = app.listen(process.env.PORT || 3000, () => {
+    console.log('Servidor escuchando en puerto ' + (listener.address().port || process.env.PORT));
+  });
+}
 
-  // Solo ejecutar runner si estamos en modo test
-  if (process.env.NODE_ENV === 'test') {
-    console.log('Running Tests...');
-    setTimeout(() => {
-      try {
-        runner.run();
-      } catch (e) {
-        console.log('Tests are not valid:');
-        console.error(e);
-      }
-    }, 3500);
-  }
-});
+// Run tests if in test mode
+if (process.env.NODE_ENV === 'test') {
+  console.log('Running Tests...');
+  setTimeout(() => {
+    try {
+      runner.run();
+    } catch (e) {
+      console.log('Tests are not valid:');
+      console.error(e);
+    }
+  }, 3500);
+}
 
-module.exports = app; // for testing
+module.exports = app; // para testing
